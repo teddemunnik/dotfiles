@@ -1,24 +1,25 @@
-" Needed so that conemu understands vim color schemes correctly
-set term=xterm
-set t_Co=256
-let &t_AB="\e[48;5;%dm"
-let &t_AF="\e[38;5;%dm"
+" Use .vim on windows instead of _vimfiles
+set runtimepath=~/.vim,$VIMRUNTIME
 
-
+" Default tab settings. Uses 4 spaces instead of a tab.
 set expandtab
 set tabstop=4
+set shiftwidth=4
 
-set laststatus=2
+set laststatus=2 " Always show status line (airline)
 
+set guioptions-=T " No toolbar
+set guioptions-=m " No menu bar
+set guioptions-=r " No right hand scrollbar
+set guioptions-=L " No left hand scrollbar
+set guifont=Source_Code_Pro:h10:cANSI
 
 set nocompatible
-set number
+set relativenumber
 set ruler
 set hidden
 syntax on
-colorscheme onedark
-
-let g:airline#extensions#tabline#enabled = 1
+colorscheme railscasts
 
 execute pathogen#infect()
 
