@@ -16,6 +16,7 @@ set guifont=Source_Code_Pro:h10:cANSI
 
 set nocompatible
 set relativenumber
+set number
 set ruler
 set hidden
 syntax on
