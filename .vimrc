@@ -20,19 +20,26 @@ set relativenumber
 set number
 set ruler
 set hidden
-set exrc " .vimrc in project folder
 set secure
+set list
+set listchars=tab:▸\ ,eol:¬,space:·
+
 syntax on
 colorscheme railscasts
 
 let g:rooter_patterns = [ '.git', 'units.lua' ]
 let g:airline_powerline_fonts = 1
 
+let g:ctrlp_working_path_mode = 'a'
+
 call plug#begin()
 Plug 'tpope/vim-sensible'
+Plug 'tpope/vim-fugitive'
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'nfvs/vim-perforce'
 Plug 'vim-airline/vim-airline'
 Plug 'airblade/vim-rooter'
 Plug 'Valloric/YouCompleteMe'
+Plug 'leafgarland/typescript-vim'
+Plug 'beyondmarc/hlsl.vim'
 call plug#end()
