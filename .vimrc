@@ -4,7 +4,9 @@ set runtimepath=~/.vim,$VIMRUNTIME
 " Default tab settings. Uses 4 spaces instead of a tab.
 set expandtab
 set tabstop=4
+set softtabstop=4
 set shiftwidth=4
+set backspace=indent,eol,start
 
 set laststatus=2 " Always show status line (airline)
 
@@ -21,25 +23,34 @@ set number
 set ruler
 set hidden
 set secure
-set list
-set listchars=tab:▸\ ,eol:¬,space:·
-
 syntax on
 colorscheme railscasts
 
-let g:rooter_patterns = [ '.git', 'units.lua' ]
-let g:airline_powerline_fonts = 1
+map <leader>k :vsc View.SolutionExplorer<CR>
 
-let g:ctrlp_working_path_mode = 'a'
+au BufNewFile,BufRead *.xaml set filetype=xml " Act as if XAML files are XML files.
+
+
+let g:rooter_patterns = [ '.git', 'units.lua', 'generate.bat' ]
+
+" CTRLP 
+let g:ctrlp_working_path_mode = 'a' " controlp must obey rooter
+let g:ctrlp_user_command = 'ag -l --vimgrep --nocolor -g "" %s'
+let g:ctrlp_cache_dir = $HOME . '/.cache/ctrlp'
+
+
+let g:airline_powerline_fonts = 1
+let g:plug_timeout = 1000
+
+let g:ycm_autoclose_preview_window_after_completion = 1
+map <C-G> :YcmCompleter GoTo<CR>
 
 call plug#begin()
 Plug 'tpope/vim-sensible'
-Plug 'tpope/vim-fugitive'
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'nfvs/vim-perforce'
 Plug 'vim-airline/vim-airline'
 Plug 'airblade/vim-rooter'
+Plug 'easymotion/vim-easymotion'
 Plug 'Valloric/YouCompleteMe'
-Plug 'leafgarland/typescript-vim'
-Plug 'beyondmarc/hlsl.vim'
 call plug#end()
