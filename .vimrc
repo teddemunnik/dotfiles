@@ -17,6 +17,7 @@ set guioptions-=L " No left hand scrollbar
 set guifont=Source_Code_Pro:h10
 
 set encoding=utf-8
+set ff=unix
 scriptencoding utf-8
 set relativenumber
 set number
@@ -35,7 +36,7 @@ let g:rooter_patterns = [ '.git', 'units.lua', 'generate.bat' ]
 
 " CTRLP 
 let g:ctrlp_working_path_mode = 'a' " controlp must obey rooter
-let g:ctrlp_user_command = 'ag -l --vimgrep --nocolor -g "" %s'
+let g:ctrlp_user_command = 'ag --files-with-matches --nocolor -g "" %s'
 let g:ctrlp_cache_dir = $HOME . '/.cache/ctrlp'
 
 
@@ -46,7 +47,6 @@ let g:ycm_autoclose_preview_window_after_completion = 1
 map <C-G> :YcmCompleter GoTo<CR>
 
 call plug#begin()
-Plug 'tpope/vim-sensible'
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'nfvs/vim-perforce'
 Plug 'vim-airline/vim-airline'
