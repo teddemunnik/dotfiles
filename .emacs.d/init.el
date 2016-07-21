@@ -17,9 +17,10 @@
   :init (load-theme 'monokai t))
 
 (set-face-attribute 'default nil :family "Source Code Pro Regular")
-(menu-bar-mode -1) ; No menu bar in UI emacs
-(tool-bar-mode -1) ; No toolbar in UI emacs
-(scroll-bar-mode -1) ; No scrollbar in UI emacs
+(menu-bar-mode -1)  ; No menu bar in UI emacs
+(tool-bar-mode -1)  ; No toolbar in UI emacs
+(scroll-bar-mode -1)  ; No scrollbar in UI emacs
+(setq inhibit-startup-screen t)  ; No startup screen
 
 ;; Evil for dat vim emulation
 (use-package evil
