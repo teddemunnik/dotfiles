@@ -14,7 +14,6 @@ set guioptions-=T " No toolbar
 set guioptions-=m " No menu bar
 set guioptions-=r " No right hand scrollbar
 set guioptions-=L " No left hand scrollbar
-set guifont=Source_Code_Pro:h10
 
 set encoding=utf-8
 set ff=unix
@@ -25,32 +24,36 @@ set ruler
 set hidden
 set secure
 syntax on
-colorscheme railscasts
 
 map <leader>k :vsc View.SolutionExplorer<CR>
 
 au BufNewFile,BufRead *.xaml set filetype=xml " Act as if XAML files are XML files.
 
-
-let g:rooter_patterns = [ '.git', 'units.lua', 'generate.bat' ]
+" ROOTER
+let g:rooter_change_directory_for_non_project_files = 'current'
+let g:rooter_patterns = [ '.git/', 'units.lua', 'tags' ]
+let g_rooter_resolve_links = 1
 
 " CTRLP 
 let g:ctrlp_working_path_mode = 'a' " controlp must obey rooter
 let g:ctrlp_user_command = 'ag --files-with-matches --nocolor -g "" %s'
 let g:ctrlp_cache_dir = $HOME . '/.cache/ctrlp'
 
-
 let g:airline_powerline_fonts = 1
 let g:plug_timeout = 1000
 
-let g:ycm_autoclose_preview_window_after_completion = 1
-map <C-G> :YcmCompleter GoTo<CR>
+" LOCALVIMRC
+let g:localvimrc_ask = 0
 
 call plug#begin()
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'nfvs/vim-perforce'
+Plug 'tpope/vim-fugitive'
 Plug 'vim-airline/vim-airline'
 Plug 'airblade/vim-rooter'
-Plug 'easymotion/vim-easymotion'
-Plug 'Valloric/YouCompleteMe'
+Plug 'embear/vim-localvimrc'
+Plug 'octol/vim-cpp-enhanced-highlight'
+Plug 'morhetz/gruvbox'
 call plug#end()
+
+colorscheme gruvbox

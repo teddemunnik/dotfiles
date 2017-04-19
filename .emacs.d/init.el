@@ -1,50 +1,86 @@
-;; Package system initialisation
-(add-to-list 'load-path "~/.emacs.d/lib/")
+;; Disable unneccesary UI elements early to avoid it showing up momentarily
+(menu-bar-mode -1)
+(scroll-bar-mode -1)
+(tool-bar-mode -1)
+(setq inhibit-startup-message 1)
+(setq sentence-end-double-space nil)
+
+;; Place backups in a specified directory
+(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
+(setq delete-old-versions -1)
+(setq version-control t)
+(setq vc-make-backup-files t)
+(setq auto-save-file-name-transforms '((".*" "~/.emacs.d/auto-save-list/" t)))
+
+;; Save command history so that undo works across saves
+(setq savehist-file "~/.emacs.d/savehist")
+(savehist-mode +1)
+(setq savehist-save-minibuffer-history +1)
+(setq savehist-additional-variables '(kill-ring search-ring regexp-search-ring))
+
 (require 'package)
-(eval-when-compile (require 'use-package))
-(add-to-list 'package-archives `("melpa" . "http://melpa.org/packages/"))
+(setq package-enable-at-startup nil)
+(add-to-list 'package-archives
+             '("melpa" . "http://melpa.org/packages/"))
+
 (package-initialize)
 
-;; Emacs Server
-;; By running this ensures that only a single instance of emacs is active, and trying to open a second one
-;; will instead open the file in the existing emacs instance.
-(require 'server)
-(unless (server-running-p) (server-start))
+;; Bootstrap `use-package'
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
 
-;; UI Customisation 
+(eval-when-compile
+  (require 'use-package))
+
+
+(use-package evil
+  :ensure t
+  :init
+  (progn
+    (setq evil-default-cursor t)
+    (evil-mode 1)
+    )
+ )
+
 (use-package monokai-theme
   :ensure t
   :init (load-theme 'monokai t))
 
-(set-face-attribute 'default nil :family "Source Code Pro Regular")
-(menu-bar-mode -1)  ; No menu bar in UI emacs
-(tool-bar-mode -1)  ; No toolbar in UI emacs
-(scroll-bar-mode -1)  ; No scrollbar in UI emacs
-(setq inhibit-startup-screen t)  ; No startup screen
-
-;; Evil for dat vim emulation
-(use-package evil
+(blink-cursor-mode 0)
+(global-linum-mode 1)
+(use-package linum-relative
   :ensure t
-  :init
-  (evil-mode 1)
-  )
+  :config (progn
+	    (setq linum-relative-format "%3s ")
+	    (setq linum-relative-current-symbol "")
+	    (linum-relative-on)))
 
-;; Combination of helm/projectile to get Ctrl+P find files in project
-(use-package helm
-  :ensure t)
+;; General key bindings
+(setq my-leader "SPC")
+(use-package general
+  :ensure t
+  :init (progn
+	  (setq general-default-keymaps 'evil-normal-state-map)
+	  (general-define-key
+	   "j" 'evil-next-visual-line
+	   "k" 'evil-previous-visual-line)
 
+	  (general-define-key :prefix my-leader "ff" 'helm-find-files)))
+
+;; Projectile
 (use-package projectile
   :ensure t
-  :config
-  (use-package helm-projectile
-    :ensure t
-    :init
-    (define-key evil-normal-state-map (kbd "C-p") 'helm-projectile-find-file))
-  :init
-  (projectile-global-mode)
-  (setq projectile-indexing-method 'alien))
+  :init (progn
+	  (general-define-key :prefix my-leader "fF" 'projectile-find-file)))
 
-(use-package p4
+;; Helm
+(use-package helm
+  :ensure t)
+(use-package helm-ag
+  :ensure t)
+(use-package helm-projectile
   :ensure t
-  :init
-  (evil-ex-define-cmd "P4edit" `p4-edit))
+  :init (progn
+	  (general-define-key :prefix my-leader "fg" 'helm-projectile-ag)))
+
