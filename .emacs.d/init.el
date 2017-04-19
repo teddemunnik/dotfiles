@@ -18,6 +18,11 @@
 (setq savehist-save-minibuffer-history +1)
 (setq savehist-additional-variables '(kill-ring search-ring regexp-search-ring))
 
+;; Save recently opened files
+(require 'recentf)
+(recentf-mode 1)
+(setq recentf-max-menu-items 25)
+
 (require 'package)
 (setq package-enable-at-startup nil)
 (add-to-list 'package-archives
@@ -38,6 +43,7 @@
   :ensure t
   :init
   (progn
+    (setq evil-want-C-u-scroll t)
     (setq evil-default-cursor t)
     (evil-mode 1)
     )
@@ -56,6 +62,12 @@
 	    (setq linum-relative-current-symbol "")
 	    (linum-relative-on)))
 
+(set-face-attribute 'default nil
+		    :family "Source Code Pro"
+		    :height 120
+		    :weight 'normal
+		    :width 'normal)
+
 ;; General key bindings
 (setq my-leader "SPC")
 (use-package general
@@ -64,23 +76,34 @@
 	  (setq general-default-keymaps 'evil-normal-state-map)
 	  (general-define-key
 	   "j" 'evil-next-visual-line
-	   "k" 'evil-previous-visual-line)
-
-	  (general-define-key :prefix my-leader "ff" 'helm-find-files)))
+	   "k" 'evil-previous-visual-line)))
 
 ;; Projectile
 (use-package projectile
   :ensure t
-  :init (progn
-	  (general-define-key :prefix my-leader "fF" 'projectile-find-file)))
+  :init (projectile-mode)
+  :config (progn
+            (general-define-key :prefix my-leader "pc" 'projectile-compile-project)))
 
 ;; Helm
 (use-package helm
-  :ensure t)
+  :ensure t
+  :config (progn
+	    (general-define-key :keymaps 'helm-map "C-j" 'helm-next-line)
+	    (general-define-key :keymaps 'helm-map "C-k" 'helm-previous-line)
+	    (general-define-key :keymaps 'helm-map "<escape>" 'helm-keyboard-quit)
+	    (general-define-key :prefix my-leader "ff" 'helm-find-files)
+        (general-define-key :prefix my-leader "fr" 'helm-recentf)
+	    ))
 (use-package helm-ag
   :ensure t)
 (use-package helm-projectile
   :ensure t
-  :init (progn
-	  (general-define-key :prefix my-leader "fg" 'helm-projectile-ag)))
+  :config (progn
+            (general-define-key :prefix my-leader "pp" 'helm-projectile-switch-project)
+            (general-define-key :prefix my-leader "fg" 'helm-projectile-ag)
+            (general-define-key :prefix my-leader "pf" 'helm-projectile-find-file)))
 
+(setq-default c-basic-offset 4
+	      tab-width 4
+	      indent-tabs-mode nil)
