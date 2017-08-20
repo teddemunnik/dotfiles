@@ -69,6 +69,7 @@
 		    :width 'normal)
 
 ;; General key bindings
+
 (setq my-leader "SPC")
 (use-package general
   :ensure t
@@ -77,6 +78,8 @@
 	  (general-define-key
 	   "j" 'evil-next-visual-line
 	   "k" 'evil-previous-visual-line)))
+
+(general-define-key :prefix my-leader "m" 'helm-imenu)
 
 ;; Projectile
 (use-package projectile
