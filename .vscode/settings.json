@@ -1,0 +1,25 @@
+{
+    "workbench.colorTheme": "Default Dark+",
+    "debug.allowBreakpointsEverywhere": true,
+    "git.autofetch": true,
+    "rust-analyzer.debug.engine": "ms-vscode.cpptools",
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
+    "cmake.pinnedCommands": [
+        "workbench.action.tasks.configureTaskRunner",
+        "workbench.action.tasks.runTask"
+    ],
+    "vim.easymotion": true,
+    "vim.incsearch": true,
+    "vim.useSystemClipboard": true,
+    "vim.normalModeKeyBindings": [
+        {
+            "before": ["r", "r"],
+            "commands": [
+                "editor.action.rename"
+            ]
+        }
+
+    ]
+}
