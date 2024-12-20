@@ -1,0 +1,13 @@
+map <space> <leader>
+
+
+nmap <C-O> :vsc View.NavigateBackward<CR>
+nmap <C-I> :vsc View.NavigateForward<CR>
+nmap <C-P> :vsc Resharper.ReSharper_GotoType<CR>
+nnoremap <leader>u :vsc Resharper.Resharper_FindUsages<CR>
+
+" nnoremap <M-O> :vsc EditorContextMenus.CodeWindow.ToggleHeaderCodeFile<CR>
+nnoremap <M-O> :vsc Resharper.Resharper_SwitchHeaderSource<CR>
+nnoremap <M-Enter> :vsc EditorContextMenus.CodeWindow.QuickActionsForPosition<CR>
+nnoremap <C-M-Enter> :vsc Edit.FormatDocument<CR>
+nnoremap rr :vsc Resharper.Resharper_Rename<CR>
