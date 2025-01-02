@@ -19,6 +19,7 @@
             "before": ["r", "r"],
             "commands": [
                 "editor.action.rename"
+
             ]
         }
 
