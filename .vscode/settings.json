@@ -11,6 +11,7 @@
         "workbench.action.tasks.runTask"
     ],
     "vim.easymotion": true,
+    "vim.surround": true,
     "vim.incsearch": true,
     "vim.useSystemClipboard": true,
     "vim.normalModeKeyBindings": [
