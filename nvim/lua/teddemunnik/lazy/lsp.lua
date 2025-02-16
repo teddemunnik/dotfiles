@@ -10,7 +10,8 @@ return {
         "hrsh7th/cmp-cmdline",
         "hrsh7th/nvim-cmp",
 	},
-	config = function()
+    lazy = false,
+    config = function()
         vim.api.nvim_create_autocmd('LspAttach', {
             group = vim.api.nvim_create_augroup('teddemunnik-lsp-attach', { clear = true }),
             callback = function(event)
@@ -20,6 +21,9 @@ return {
                 vim.keymap.set('n', 'gr', telescope_builtin.lsp_references, { desc = '[G]goto [R]eferences'})
                 vim.keymap.set('n', 'gI', telescope_builtin.lsp_implementations, { desc = '[G]oto [I]mplemtation'})
                 vim.keymap.set('n', 'gt', telescope_builtin.lsp_type_definitions, { desc = '[G]oto [T]ype Definition'}) 
+                vim.keymap.set('n', '<M-CR>', vim.lsp.buf.code_action, { desc = 'Code Action' })
+                vim.keymap.set('n', 'ff', vim.lsp.buf.format, { desc = 'Format File' })
+
 
                 local client = vim.lsp.get_client_by_id(event.data.client_id)
                 if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
@@ -71,8 +75,7 @@ return {
                 end,
             },
             ensure_installed = {
-                "lua_ls", 
-                "rust_analyzer"
+                "lua_ls", "rust_analyzer"
             },
         })
 		require("fidget").setup({})
