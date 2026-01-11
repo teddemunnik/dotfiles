@@ -10,18 +10,22 @@ vim.api.nvim_create_autocmd('TextYankPost', {
     end
 })
 
+vim.lsp.config("*", {
+    capabilities = require("blink.cmp").get_lsp_capabilities({}, true),
+});
+
 vim.lsp.config("lua_ls", {
   cmd = { "lua-language-server" },
   filetypes = { "lua" },
   settings = {
     Lua = {
-      diagnostics = { globals = { "vim" } },
       workspace = { checkThirdParty = false },
     },
   },
 })
 
 vim.lsp.enable({"lua_ls"})
+
 
 vim.api.nvim_create_autocmd('LspAttach', {
    group = vim.api.nvim_create_augroup('teddemunnik-lsp-attach', { clear = true }),
@@ -44,3 +48,6 @@ vim.api.nvim_create_autocmd('LspAttach', {
    end
 });
 
+vim.diagnostic.config({
+    virtual_lines = true
+});
