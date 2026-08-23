@@ -110,8 +110,22 @@ function Get-Platform {
 }
 
 function Expand-TargetPath($Raw) {
-    # modules.json uses %VAR% on Windows and $HOME elsewhere; normalise both.
-    $expanded = [Environment]::ExpandEnvironmentVariables($Raw)
+    <#
+      modules.json uses %VAR% on Windows and $HOME elsewhere; normalise both, plus a
+      few tokens for locations that cannot be written down literally in a shared file:
+
+        {psprofiledir} - PowerShell's own profile directory. Not %USERPROFILE%\Documents:
+                         Documents is frequently redirected to OneDrive and is localised
+                         (it is "Documenten" on this machine), so any literal spelling is
+                         wrong somewhere. Asking PowerShell is right everywhere.
+        {documents}    - the real Documents folder, redirection and locale included.
+        {repo}         - wherever this clone happens to live.
+    #>
+    $s = [string]$Raw
+    $s = $s.Replace('{psprofiledir}', (Split-Path -Parent $PROFILE.CurrentUserAllHosts))
+    $s = $s.Replace('{documents}',    [Environment]::GetFolderPath('MyDocuments'))
+    $s = $s.Replace('{repo}',         $RepoRoot)
+    $expanded = [Environment]::ExpandEnvironmentVariables($s)
     $expanded = $expanded.Replace('$HOME', $HOME)
     return $expanded
 }
