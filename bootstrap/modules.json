@@ -48,7 +48,8 @@
           "id": "Git.Git",
           "check": "git",
           "autoInstall": true,
-          "reason": "git itself. Circular on a machine that already cloned this repo, but the entry earns its place the moment someone sets one up from a zip or a different clone method"
+          "reason": "git itself. Circular on a machine that already cloned this repo, but the entry earns its place the moment someone sets one up from a zip or a different clone method",
+          "$comment": "Upgrading this one is awkward and the failure is opaque. It installs machine-wide, so -Upgrade without elevation gets [ADMIN]. Elevate and it can still fail with a bare 'Installer failed with exit code: 1': the Inno Setup installer refuses while any Git for Windows binary is running, and silent mode takes the suppressed prompt's default, which is Cancel. Claude Code's Bash tool is Git Bash, so a session open in this repo is itself the blocker. Upgrade Git from a shell that is not Git Bash with no Claude Code running, or pass --custom \"/CLOSEAPPLICATIONS /RESTARTAPPLICATIONS\" and accept that it terminates those shells. The real reason is never on winget's stdout - it is in the installer log winget names on the failing line."
         },
         {
           "kind": "winget",
