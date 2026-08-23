@@ -4,3 +4,11 @@
 .emacs.d/auto-save-list
 .emacs.d/elpa
 .emacs.d/savehist
+
+# bootstrap: per-machine module choices, never shared
+bootstrap/state.local.json
+
+# safety net - Claude Code secrets and machine-local state must never land here
+claude/.credentials.json
+claude/settings.local.json
+claude/.claude.json

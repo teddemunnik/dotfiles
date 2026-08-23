@@ -1,0 +1,82 @@
+{
+  "$comment": "Module registry for bootstrap.ps1. Pure data - a future POSIX runner reads the same file. Link targets are keyed by platform; a link with no entry for the current platform is skipped.",
+  "modules": [
+    {
+      "id": "claude",
+      "description": "Claude Code global config (settings, statusline, CLAUDE.md)",
+      "enabled": true,
+      "enabledByDefault": true,
+      "links": [
+        {
+          "source": "claude/settings.json",
+          "type": "file",
+          "target": {
+            "windows": "%USERPROFILE%\\.claude\\settings.json",
+            "linux": "$HOME/.claude/settings.json"
+          }
+        },
+        {
+          "source": "claude/claude-powerline.json",
+          "type": "file",
+          "target": {
+            "windows": "%USERPROFILE%\\.claude\\claude-powerline.json",
+            "linux": "$HOME/.claude/claude-powerline.json"
+          }
+        },
+        {
+          "source": "claude/CLAUDE.md",
+          "type": "file",
+          "target": {
+            "windows": "%USERPROFILE%\\.claude\\CLAUDE.md",
+            "linux": "$HOME/.claude/CLAUDE.md"
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "command",
+          "name": "claude-powerline",
+          "install": "npm install -g @owloops/claude-powerline",
+          "reason": "settings.json sets statusLine to this command; without it the statusline silently falls back to the default"
+        }
+      ]
+    },
+
+    {
+      "id": "vim",
+      "description": "STUB - vim, ideavim and vsvim rc files",
+      "enabled": false,
+      "enabledByDefault": false,
+      "todo": "Wire up .vimrc, .ideavimrc, .vsvimrc. Supersedes install-vim-windows.cmd, which uses a bare mklink /H with no conflict checking. Note .vimrc currently has no link on this machine.",
+      "links": [],
+      "requires": []
+    },
+    {
+      "id": "nvim",
+      "description": "STUB - neovim configuration",
+      "enabled": false,
+      "enabledByDefault": false,
+      "todo": "BLOCKED on de-tangling the link direction first. On the machine where it was set up, the repo's `nvim` entry is itself a symlink pointing OUT to %LOCALAPPDATA%\\nvim - the opposite direction from every other entry. Git followed it when adding, so 17 real files are tracked at mode 100644 and a fresh clone does get the actual config; content is not at risk. The gap is that a fresh clone leaves nvim/ as an ordinary directory nobody reads, because nothing links %LOCALAPPDATA%\\nvim to it. Wiring the obvious link here would be self-referential on the original machine, where repo/nvim already points at that exact target. Fix by inverting it there - replace the repo symlink with the real directory, then link %LOCALAPPDATA%\\nvim back to it - after which the same link works everywhere and this module can be populated.",
+      "links": [],
+      "requires": []
+    },
+    {
+      "id": "vscode",
+      "description": "STUB - VS Code user settings, keybindings and snippets",
+      "enabled": false,
+      "enabledByDefault": false,
+      "todo": "Wire up .vscode/{settings.json,keybindings.json,snippets} to %APPDATA%\\Code\\User\\. All three are currently real files there, so expect the conflict path on first run.",
+      "links": [],
+      "requires": []
+    },
+    {
+      "id": "windows-terminal",
+      "description": "STUB - Windows Terminal settings and assets",
+      "enabled": false,
+      "enabledByDefault": false,
+      "todo": "Target lives under %LOCALAPPDATA%\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\. The package directory name varies by install channel (Store vs Preview vs unpackaged), so this needs glob resolution rather than a fixed path.",
+      "links": [],
+      "requires": []
+    }
+  ]
+}
