@@ -526,6 +526,16 @@ function Get-RequirementName($Req) {
     }
 }
 
+function Update-ProcessPath {
+    # Rebuild this process's PATH from the persisted Machine and User values, so a
+    # tool installed during this run becomes findable without starting a new shell.
+    $parts = @(
+        [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+    ) | Where-Object { $_ }
+    if ($parts) { $env:Path = ($parts -join ';') }
+}
+
 function Test-FontInstalled($Family) {
     # Asks the system what families it actually has, so a font installed by any
     # route counts - not just one this script put there.
@@ -709,6 +719,13 @@ function Install-Requirement($Req) {
     } else {
         & npm install -g $Req.package 2>&1 | ForEach-Object { Write-Note $_ }
     }
+
+    # An installer edits the persisted PATH, but this process inherited its copy at
+    # start-up and will never see the change - so a tool installed a moment ago still
+    # looks absent, and anything depending on it fails in the same run. Node is the
+    # case that matters: packages installs it, then the claude module immediately
+    # needs npm. Re-read PATH from the environment so the rest of the run can see it.
+    Update-ProcessPath
 
     # Trust the post-state, not the exit code: winget reports distinct codes for
     # "already installed" and "reboot required", both of which are fine for us.

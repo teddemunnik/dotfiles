@@ -2,48 +2,6 @@
   "$comment": "Module registry for bootstrap.ps1. Pure data - a future POSIX runner reads the same file. Link targets are keyed by platform; a link with no entry for the current platform is skipped.",
   "modules": [
     {
-      "id": "claude",
-      "description": "Claude Code global config (settings, statusline, CLAUDE.md)",
-      "enabled": true,
-      "enabledByDefault": true,
-      "links": [
-        {
-          "source": "claude/settings.json",
-          "type": "file",
-          "target": {
-            "windows": "%USERPROFILE%\\.claude\\settings.json",
-            "linux": "$HOME/.claude/settings.json"
-          }
-        },
-        {
-          "source": "claude/claude-powerline.json",
-          "type": "file",
-          "target": {
-            "windows": "%USERPROFILE%\\.claude\\claude-powerline.json",
-            "linux": "$HOME/.claude/claude-powerline.json"
-          }
-        },
-        {
-          "source": "claude/CLAUDE.md",
-          "type": "file",
-          "target": {
-            "windows": "%USERPROFILE%\\.claude\\CLAUDE.md",
-            "linux": "$HOME/.claude/CLAUDE.md"
-          }
-        }
-      ],
-      "requires": [
-        {
-          "kind": "npm",
-          "package": "@owloops/claude-powerline",
-          "check": "claude-powerline",
-          "autoInstall": true,
-          "reason": "settings.json sets statusLine to this command; without it the statusline silently falls back to the default"
-        }
-      ]
-    },
-
-    {
       "id": "packages",
       "description": "Baseline apps, installed with winget",
       "$comment": "Not enabled by default - installing software is a heavier action than dropping a symlink, so it is always an explicit opt-in. Find a package id with `winget search <name>` and use the exact Id column value.",
@@ -51,6 +9,13 @@
       "enabledByDefault": false,
       "links": [],
       "requires": [
+        {
+          "kind": "winget",
+          "id": "OpenJS.NodeJS",
+          "check": "npm",
+          "autoInstall": true,
+          "reason": "node and npm. A genuine prerequisite, not a preference: the claude module installs claude-powerline as an npm global, so without npm its statusline cannot be set up at all. Checked on npm rather than node, since npm is the part that is actually depended on"
+        },
         {
           "kind": "winget",
           "id": "glzr-io.glazewm",
@@ -110,6 +75,48 @@
     },
 
     {
+      "id": "claude",
+      "description": "Claude Code global config (settings, statusline, CLAUDE.md)",
+      "enabled": true,
+      "enabledByDefault": true,
+      "links": [
+        {
+          "source": "claude/settings.json",
+          "type": "file",
+          "target": {
+            "windows": "%USERPROFILE%\\.claude\\settings.json",
+            "linux": "$HOME/.claude/settings.json"
+          }
+        },
+        {
+          "source": "claude/claude-powerline.json",
+          "type": "file",
+          "target": {
+            "windows": "%USERPROFILE%\\.claude\\claude-powerline.json",
+            "linux": "$HOME/.claude/claude-powerline.json"
+          }
+        },
+        {
+          "source": "claude/CLAUDE.md",
+          "type": "file",
+          "target": {
+            "windows": "%USERPROFILE%\\.claude\\CLAUDE.md",
+            "linux": "$HOME/.claude/CLAUDE.md"
+          }
+        }
+      ],
+      "requires": [
+        {
+          "kind": "npm",
+          "package": "@owloops/claude-powerline",
+          "check": "claude-powerline",
+          "autoInstall": true,
+          "reason": "settings.json sets statusLine to this command; without it the statusline silently falls back to the default"
+        }
+      ]
+    },
+
+    {
       "id": "powershell",
       "description": "PowerShell profile",
       "$comment": "Targets are computed, never hardcoded. Documents on this machine is both redirected to OneDrive and localised - the real path is OneDrive\\Documenten - so %USERPROFILE%\\Documents would be wrong here and wrong in a different way on another machine. {documents} resolves it correctly under redirection, localisation and neither. The two directory names beneath it are fixed: WindowsPowerShell for 5.1, PowerShell for 7. Do not reach for $PROFILE to derive these - it resolves against whichever host runs the bootstrap, so running it from pwsh would aim both links at the PS7 path and leave Windows PowerShell unlinked. profile.ps1 is the AllHosts profile, so it also loads in the VS Code terminal and the ISE, and one file serves both shells. Machine-local additions go in Microsoft.PowerShell_profile.ps1 beside it, which stays unversioned.",
@@ -145,6 +152,7 @@
       "links": [],
       "requires": []
     },
+
     {
       "id": "nvim",
       "description": "STUB - neovim configuration",
@@ -154,6 +162,7 @@
       "links": [],
       "requires": []
     },
+
     {
       "id": "vscode",
       "description": "STUB - VS Code user settings, keybindings and snippets",
@@ -163,6 +172,7 @@
       "links": [],
       "requires": []
     },
+
     {
       "id": "windows-terminal",
       "description": "Windows Terminal settings",
