@@ -4,9 +4,17 @@
 
 .DESCRIPTION
     Reads bootstrap/modules.json and, for each enabled module, links its files to
-    their platform-specific targets. Safe by default: an existing real file whose
-    content differs from the repo copy is never touched without -Force, and every
-    replacement is backed up first. Idempotent - a second run does nothing.
+    their platform-specific targets and installs the packages it declares. Safe by
+    default: an existing real file whose content differs from the repo copy is never
+    touched without -Force, and every replacement is backed up first. Idempotent - a
+    second run does nothing.
+
+    A module may declare dependencies in `requires`, each with a `kind`:
+      winget  - a Windows package, by exact id (find one with `winget search <name>`)
+      npm     - a global npm package
+      command - advisory only: report if absent, never install
+    Entries marked "autoInstall": true are installed when a module is applied;
+    everything else is only reported. -SkipPackages suppresses installs entirely.
 
 .PARAMETER List
     Show every module and the current state of its links. Changes nothing.
@@ -24,6 +32,13 @@
 .PARAMETER Force
     Replace conflicting real files instead of skipping them. Always backs up first.
 
+.PARAMETER SkipPackages
+    Link files only. Missing packages are reported but never installed.
+
+.EXAMPLE
+    .\bootstrap.ps1 -Modules packages
+    Install the baseline winget apps, touching no config files.
+
 .EXAMPLE
     .\bootstrap.ps1
     Interactive: shows each module's status and asks whether to apply it.
@@ -38,7 +53,8 @@ param(
     [switch]   $All,
     [switch]   $List,
     [switch]   $Apply,
-    [switch]   $Force
+    [switch]   $Force,
+    [switch]   $SkipPackages
 )
 
 Set-StrictMode -Version 2.0
@@ -58,6 +74,7 @@ $script:AlreadyOk = 0
 $script:Conflicts = @()
 $script:Failures  = @()
 $script:Fallbacks = @()
+$script:MissingDeps = @()
 
 
 # ---------------------------------------------------------------- presentation
@@ -341,9 +358,15 @@ function Show-Module($Module, $Platform) {
         return
     }
 
-    $links = Resolve-ModuleLinks $Module $Platform
+    $links = @(Resolve-ModuleLinks $Module $Platform)
     if ($links.Count -eq 0) {
-        Write-Note 'no links defined for this platform'
+        # A module may legitimately be packages-only, so fall through to requirements
+        # rather than returning - only a module with neither is genuinely empty here.
+        if (@($Module.requires).Count -eq 0) {
+            Write-Note 'nothing defined for this platform'
+            return
+        }
+        Show-Requirements $Module
         return
     }
 
@@ -371,20 +394,152 @@ function Show-Module($Module, $Platform) {
     Show-Requirements $Module
 }
 
+function Get-Prop($Object, $Name, $Default) {
+    if ($Object.PSObject.Properties.Name -contains $Name) { return $Object.$Name }
+    return $Default
+}
+
+function Get-RequirementName($Req) {
+    switch ($Req.kind) {
+        'winget'  { return (Get-Prop $Req 'id' '?') }
+        'npm'     { return (Get-Prop $Req 'package' '?') }
+        default   { return (Get-Prop $Req 'name' '?') }
+    }
+}
+
+function Test-Requirement($Req) {
+    <#
+      Is this dependency already present? A `check` command is the fast path when the
+      package puts something on PATH; otherwise fall back to asking the package
+      manager, which is authoritative but slower.
+    #>
+    $check = Get-Prop $Req 'check' $null
+    if ($check) {
+        if (Get-Command $check -ErrorAction SilentlyContinue) { return $true }
+    }
+
+    switch ($Req.kind) {
+        'winget' {
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
+            & winget list --id $Req.id --exact --accept-source-agreements 2>&1 | Out-Null
+            return ($LASTEXITCODE -eq 0)
+        }
+        'npm' {
+            if ($check) { return $false }   # already probed above
+            return [bool](Get-Command (Get-Prop $Req 'package' '') -ErrorAction SilentlyContinue)
+        }
+        default {
+            return [bool](Get-Command (Get-Prop $Req 'name' '') -ErrorAction SilentlyContinue)
+        }
+    }
+}
+
+function Get-RequirementInstallCommand($Req) {
+    switch ($Req.kind) {
+        'winget' {
+            return ("winget install --id {0} --exact --silent --accept-package-agreements --accept-source-agreements" -f $Req.id)
+        }
+        'npm' {
+            return ("npm install -g {0}" -f $Req.package)
+        }
+        default { return (Get-Prop $Req 'install' $null) }
+    }
+}
+
+function Install-Requirement($Req) {
+    # Returns $true when the dependency ends up present.
+    $name = Get-RequirementName $Req
+    $tool = 'winget'
+    if ($Req.kind -eq 'npm') { $tool = 'npm' }
+
+    if ($Req.kind -eq 'winget' -or $Req.kind -eq 'npm') {
+        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+            Write-Mark '[dep]' ("{0} - cannot install, {1} is not available" -f $name, $tool) 'Red'
+            return $false
+        }
+    } else {
+        # 'command' kind is advisory only; we never guess how to install it.
+        return $false
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($name, ("install via " + $tool))) { return $false }
+
+    Write-Mark '[dep]' ("installing {0} via {1} ..." -f $name, $tool) 'Cyan'
+
+    if ($Req.kind -eq 'winget') {
+        & winget install --id $Req.id --exact --silent `
+            --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 |
+            ForEach-Object { Write-Note $_ }
+    } else {
+        & npm install -g $Req.package 2>&1 | ForEach-Object { Write-Note $_ }
+    }
+
+    # Trust the post-state, not the exit code: winget reports distinct codes for
+    # "already installed" and "reboot required", both of which are fine for us.
+    if (Test-Requirement $Req) {
+        Write-Mark '[dep]' ("{0} installed" -f $name) 'Green'
+        return $true
+    }
+
+    Write-Mark '[dep]' ("{0} still missing after install (exit {1})" -f $name, $LASTEXITCODE) 'Red'
+    return $false
+}
+
 function Show-Requirements($Module) {
     if (-not ($Module.PSObject.Properties.Name -contains 'requires')) { return }
-    if ($Module.requires.Count -eq 0) { return }
+    if (@($Module.requires).Count -eq 0) { return }
 
-    foreach ($req in $Module.requires) {
-        if ($req.kind -ne 'command') { continue }
-        $found = Get-Command $req.name -ErrorAction SilentlyContinue
+    foreach ($req in @($Module.requires)) {
+        $name = Get-RequirementName $req
         Write-Host ''
-        if ($found) {
-            Write-Mark '[dep]' ("{0} found" -f $req.name) 'Green'
+        if (Test-Requirement $req) {
+            Write-Mark '[dep]' ("{0} present" -f $name) 'Green'
+            continue
+        }
+
+        $auto = Get-Prop $req 'autoInstall' $false
+        if ($auto) {
+            Write-Mark '[dep]' ("{0} missing - will install" -f $name) 'Yellow'
         } else {
-            Write-Mark '[dep]' ("{0} NOT installed" -f $req.name) 'Yellow'
-            Write-Note $req.reason
-            Write-Note ("install with: " + $req.install)
+            Write-Mark '[dep]' ("{0} missing" -f $name) 'Yellow'
+        }
+        Write-Note (Get-Prop $req 'reason' '')
+        $cmd = Get-RequirementInstallCommand $req
+        if ($cmd) { Write-Note ("install with: " + $cmd) }
+    }
+}
+
+function Invoke-Requirements($Module) {
+    if (-not ($Module.PSObject.Properties.Name -contains 'requires')) { return }
+    if (@($Module.requires).Count -eq 0) { return }
+
+    foreach ($req in @($Module.requires)) {
+        $name = Get-RequirementName $req
+        Write-Host ''
+
+        if (Test-Requirement $req) {
+            Write-Mark '[dep]' ("{0} present" -f $name) 'Green'
+            continue
+        }
+
+        $auto = Get-Prop $req 'autoInstall' $false
+        if ($SkipPackages -or -not $auto) {
+            $script:MissingDeps += ("{0} ({1})" -f $name, $Module.id)
+            Write-Mark '[dep]' ("{0} missing" -f $name) 'Yellow'
+            Write-Note (Get-Prop $req 'reason' '')
+            $cmd = Get-RequirementInstallCommand $req
+            if ($cmd) { Write-Note ("install with: " + $cmd) }
+            continue
+        }
+
+        # An autoInstall that was asked for and did not work is a genuine failure, not
+        # just a note - it should show up in the exit code.
+        if (-not (Install-Requirement $req)) {
+            if ($WhatIfPreference) {
+                $script:MissingDeps += ("{0} ({1})" -f $name, $Module.id)
+            } else {
+                $script:Failures += ("{0}: install failed ({1})" -f $name, $Module.id)
+            }
         }
     }
 }
@@ -395,7 +550,7 @@ function Show-Requirements($Module) {
 function Invoke-Module($Module, $Platform) {
     Write-Head ("applying: " + $Module.id)
 
-    foreach ($l in (Resolve-ModuleLinks $Module $Platform)) {
+    foreach ($l in @(Resolve-ModuleLinks $Module $Platform)) {
         $st     = Get-LinkState $l.SourceFull $l.TargetFull
         $backup = $null
 
@@ -453,7 +608,7 @@ function Invoke-Module($Module, $Platform) {
         }
     }
 
-    Show-Requirements $Module
+    Invoke-Requirements $Module
 }
 
 
@@ -593,6 +748,15 @@ if ($script:Conflicts.Count -gt 0) {
     Write-Host ("  Skipped {0} conflict(s):" -f $script:Conflicts.Count) -ForegroundColor Red
     foreach ($c in $script:Conflicts) { Write-Host ("    " + $c) -ForegroundColor Red }
     Write-Host '    Re-run with -Force to back these up and link.' -ForegroundColor DarkGray
+}
+
+if ($script:MissingDeps.Count -gt 0) {
+    Write-Host ''
+    Write-Host ("  {0} dependency/ies still missing:" -f $script:MissingDeps.Count) -ForegroundColor Yellow
+    foreach ($d in $script:MissingDeps) { Write-Host ("    " + $d) -ForegroundColor Yellow }
+    if ($SkipPackages) {
+        Write-Host '    (-SkipPackages was set; re-run without it to install)' -ForegroundColor DarkGray
+    }
 }
 
 if ($script:Failures.Count -gt 0) {

@@ -34,10 +34,28 @@
       ],
       "requires": [
         {
-          "kind": "command",
-          "name": "claude-powerline",
-          "install": "npm install -g @owloops/claude-powerline",
+          "kind": "npm",
+          "package": "@owloops/claude-powerline",
+          "check": "claude-powerline",
+          "autoInstall": true,
           "reason": "settings.json sets statusLine to this command; without it the statusline silently falls back to the default"
+        }
+      ]
+    },
+
+    {
+      "id": "packages",
+      "description": "Baseline apps, installed with winget",
+      "$comment": "Not enabled by default - installing software is a heavier action than dropping a symlink, so it is always an explicit opt-in. Find a package id with `winget search <name>` and use the exact Id column value.",
+      "enabled": true,
+      "enabledByDefault": false,
+      "links": [],
+      "requires": [
+        {
+          "kind": "winget",
+          "id": "glzr-io.glazewm",
+          "autoInstall": true,
+          "reason": "tiling window manager"
         }
       ]
     },
