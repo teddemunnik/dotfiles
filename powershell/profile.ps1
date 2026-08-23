@@ -9,6 +9,18 @@
 # Microsoft.PowerShell_profile.ps1 next to this file, which is deliberately not
 # versioned - PowerShell loads both, AllHosts first.
 
+# --- completion ---------------------------------------------------------------
+# Out of the box Tab is TabCompleteNext, which cycles through matches one at a time
+# without showing you what they are; the menu lives on Ctrl+Space. Swap so Tab opens
+# the menu - Shift+Tab still steps backwards, and inside the menu the arrow keys
+# navigate.
+#
+# Guarded because profile.ps1 is the AllHosts profile: it also runs in hosts that
+# never load PSReadLine, where these cmdlets do not exist.
+if (Get-Command Set-PSReadLineKeyHandler -ErrorAction SilentlyContinue) {
+    Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+}
+
 # --- zoxide -------------------------------------------------------------------
 # Guarded rather than unconditional. The same profile lands on every machine and
 # one of them may not have zoxide yet; `bootstrap.ps1 -Modules packages` installs
