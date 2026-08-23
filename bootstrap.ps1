@@ -75,6 +75,7 @@ $script:Conflicts = @()
 $script:Failures  = @()
 $script:Fallbacks = @()
 $script:MissingDeps = @()
+$script:EnvChanged  = @()
 
 
 # ---------------------------------------------------------------- presentation
@@ -331,10 +332,19 @@ function Resolve-ModuleLinks($Module, $Platform) {
         $kind = 'file'
         if ($link.PSObject.Properties.Name -contains 'type') { $kind = $link.type }
 
+        # skipIfParentMissing: the target lives inside an app's own folder. If that
+        # folder is absent the app is not installed here, and creating it would leave
+        # a bogus directory behind rather than a working link.
+        $targetExpanded = Expand-TargetPath $targetRaw
+        if ((Get-Prop $link 'skipIfParentMissing' $false)) {
+            $parent = Split-Path -Parent $targetExpanded
+            if (-not (Test-Path -LiteralPath $parent)) { continue }
+        }
+
         $out += [pscustomobject]@{
             Source     = $link.source
             SourceFull = (Join-Path $RepoRoot ($link.source -replace '/', '\'))
-            TargetFull = (Expand-TargetPath $targetRaw)
+            TargetFull = $targetExpanded
             Kind       = $kind
         }
     }
@@ -362,10 +372,11 @@ function Show-Module($Module, $Platform) {
     if ($links.Count -eq 0) {
         # A module may legitimately be packages-only, so fall through to requirements
         # rather than returning - only a module with neither is genuinely empty here.
-        if (@($Module.requires).Count -eq 0) {
+        if (@($Module.requires).Count -eq 0 -and (Get-EnvEntries $Module).Count -eq 0) {
             Write-Note 'nothing defined for this platform'
             return
         }
+        Show-EnvVars $Module
         Show-Requirements $Module
         return
     }
@@ -484,6 +495,77 @@ function Install-Requirement($Req) {
     Write-Mark '[dep]' ("{0} still missing after install (exit {1})" -f $name, $LASTEXITCODE) 'Red'
     return $false
 }
+
+# ------------------------------------------------------------- environment vars
+
+function Resolve-EnvValue($Raw) {
+    # {repo} is the one token that cannot be hardcoded in a shared file - it is where
+    # this clone happens to live. Everything else is left to the OS to expand.
+    return ([string]$Raw).Replace('{repo}', $RepoRoot)
+}
+
+function Get-EnvEntries($Module) {
+    return @(Get-Prop $Module 'env' @())
+}
+
+function Show-EnvVars($Module) {
+    foreach ($e in (Get-EnvEntries $Module)) {
+        $scope = Get-Prop $e 'scope' 'User'
+        $want  = Resolve-EnvValue $e.value
+        $have  = [Environment]::GetEnvironmentVariable($e.name, $scope)
+        Write-Host ''
+        if ($have -eq $want) {
+            Write-Mark '[env]' ("{0} = {1}" -f $e.name, $want) 'Green'
+        } elseif ([string]::IsNullOrEmpty($have)) {
+            Write-Mark '[env]' ("{0} unset - will set ({1})" -f $e.name, $scope) 'Yellow'
+            Write-Note ("value: " + $want)
+        } else {
+            Write-Mark '[env]' ("{0} points elsewhere - will update" -f $e.name) 'Yellow'
+            Write-Note ("now:  " + $have)
+            Write-Note ("want: " + $want)
+        }
+        $reason = Get-Prop $e 'reason' ''
+        if ($reason) { Write-Note $reason }
+    }
+}
+
+function Invoke-EnvVars($Module) {
+    foreach ($e in (Get-EnvEntries $Module)) {
+        $scope = Get-Prop $e 'scope' 'User'
+        $want  = Resolve-EnvValue $e.value
+        $have  = [Environment]::GetEnvironmentVariable($e.name, $scope)
+
+        Write-Host ''
+        if ($have -eq $want) {
+            Write-Mark '[env]' ("{0} already set" -f $e.name) 'Green'
+            continue
+        }
+
+        if ($scope -eq 'Machine') {
+            # Machine scope needs elevation; refuse rather than half-fail.
+            Write-Mark '[env]' ("{0} - Machine scope needs an elevated run" -f $e.name) 'Yellow'
+            $script:MissingDeps += ("env {0} ({1})" -f $e.name, $Module.id)
+            continue
+        }
+
+        if (-not $PSCmdlet.ShouldProcess($e.name, ("set {0} environment variable" -f $scope))) { continue }
+
+        try {
+            [Environment]::SetEnvironmentVariable($e.name, $want, $scope)
+            # Also set it for this process so anything later in the run sees it; the
+            # persisted value only reaches already-running apps after they restart.
+            Set-Item -Path ("Env:" + $e.name) -Value $want
+            Write-Mark '[env]' ("{0} set" -f $e.name) 'Green'
+            Write-Note ("value: " + $want)
+            $script:EnvChanged += $e.name
+        } catch {
+            $script:Failures += ("env {0}: {1}" -f $e.name, $_.Exception.Message)
+            Write-Mark '[env]' ("{0} FAILED" -f $e.name) 'Red'
+            Write-Note $_.Exception.Message
+        }
+    }
+}
+
 
 function Show-Requirements($Module) {
     if (-not ($Module.PSObject.Properties.Name -contains 'requires')) { return }
@@ -608,6 +690,7 @@ function Invoke-Module($Module, $Platform) {
         }
     }
 
+    Invoke-EnvVars $Module
     Invoke-Requirements $Module
 }
 

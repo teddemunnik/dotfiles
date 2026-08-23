@@ -77,6 +77,7 @@
     {
         "defaults": 
         {
+            "backgroundImage": "assets/terminal_bg.png",
             "font": 
             {
                 "face": "FiraCode Nerd Font",
@@ -102,13 +103,12 @@
         [
             {
                 "commandline": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-                "elevate": true,
+                "elevate": false,
                 "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
                 "hidden": false,
                 "name": "Windows PowerShell"
             },
             {
-                "backgroundImage": "C:\\projects\\dotfiles\\terminal_bg.png",
                 "backgroundImageOpacity": 0.8,
                 "commandline": "%SystemRoot%\\System32\\cmd.exe",
                 "font": 

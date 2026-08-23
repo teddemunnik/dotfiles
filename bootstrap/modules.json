@@ -89,11 +89,28 @@
     },
     {
       "id": "windows-terminal",
-      "description": "STUB - Windows Terminal settings and assets",
-      "enabled": false,
-      "enabledByDefault": false,
-      "todo": "Target lives under %LOCALAPPDATA%\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\. The package directory name varies by install channel (Store vs Preview vs unpackaged), so this needs glob resolution rather than a fixed path.",
-      "links": [],
+      "description": "Windows Terminal settings",
+      "$comment": "The background image is referenced as the relative path assets/terminal_bg.png. Windows Terminal 1.24+ resolves backgroundImage relative to settings.json, so nothing machine-specific is baked into the shared file and no environment variable is needed. Linking the assets directory in alongside settings.json means it resolves whether WT looks beside the symlink or beside the file the symlink points at. 8wekyb3d8bbwe is Microsoft's publisher hash and is constant for Store apps, so the package path needs no globbing. Only the stable channel is managed: Preview is installed here too but keeps its own settings, and adopting it would mean overwriting a working config - link it deliberately with -Force if you ever want the two channels shared. On a WT older than 1.24 the relative path will not resolve; the fallback is an absolute-free %WT_SETTINGS_DIR%\\assets\\terminal_bg.png plus an env entry pointing that variable at {repo}\\windows-terminal.",
+      "enabled": true,
+      "enabledByDefault": true,
+      "links": [
+        {
+          "source": "windows-terminal/settings.json",
+          "type": "file",
+          "skipIfParentMissing": true,
+          "target": {
+            "windows": "%LOCALAPPDATA%\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\settings.json"
+          }
+        },
+        {
+          "source": "windows-terminal/assets",
+          "type": "dir",
+          "skipIfParentMissing": true,
+          "target": {
+            "windows": "%LOCALAPPDATA%\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\assets"
+          }
+        }
+      ],
       "requires": []
     }
   ]
