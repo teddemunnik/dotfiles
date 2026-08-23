@@ -35,6 +35,16 @@
 .PARAMETER SkipPackages
     Link files only. Missing packages are reported but never installed.
 
+.PARAMETER Reload
+    Link nothing; just re-create the existing links so a watching app notices and
+    hot-reloads. Use after editing a config in this repo. See Reset-Link for why an
+    edit made here is otherwise invisible to the app reading it.
+
+.EXAMPLE
+    .\bootstrap.ps1 -Modules windows-terminal -Reload
+    Make a running Windows Terminal pick up settings.json edits made in this repo,
+    without restarting it.
+
 .EXAMPLE
     .\bootstrap.ps1 -Modules packages
     Install the baseline winget apps, touching no config files.
@@ -54,7 +64,8 @@ param(
     [switch]   $List,
     [switch]   $Apply,
     [switch]   $Force,
-    [switch]   $SkipPackages
+    [switch]   $SkipPackages,
+    [switch]   $Reload
 )
 
 Set-StrictMode -Version 2.0
@@ -76,6 +87,7 @@ $script:Failures  = @()
 $script:Fallbacks = @()
 $script:MissingDeps = @()
 $script:EnvChanged  = @()
+$script:Reloaded    = 0
 
 
 # ---------------------------------------------------------------- presentation
@@ -266,6 +278,65 @@ function Test-SameContent($A, $B) {
 
 
 # --------------------------------------------------------------- link creation
+
+function Reset-Link {
+    <#
+      Re-points a link at the same source, atomically, purely to make the target
+      directory emit a change notification.
+
+      Why this exists: an app that hot-reloads its config watches the directory the
+      config lives in (ReadDirectoryChangesW). When that config is a link into this
+      repo, editing the repo file changes a file in a directory nobody is watching, so
+      no notification is ever raised and the app keeps running stale settings. Writing
+      *through* the link does not help either - measured, the notification follows the
+      data to the target's directory, not the link's.
+
+      Re-creating the link entry in the watched directory does raise one. Doing it as
+      create-temp-then-rename rather than delete-then-create means the config path is
+      never momentarily absent, so the app cannot observe a missing file and fall back
+      to defaults.
+
+      Measured, on this machine, writing to the repo file:
+
+        file symlink in the watched dir ......... no notification
+        hardlink in the watched dir ............. no notification
+        write *through* the link ................ no notification
+        directory symlink / junction AS the
+          watched dir ........................... FIRES
+        re-create the link entry (this) ......... FIRES
+
+      So the notification follows the directory entry that was written, not the file
+      identity - which is also why a hardlink does not help: it only fires when the
+      write goes through the watched name, and the whole point here is that edits
+      arrive via the repo name.
+
+      Linking the enclosing directory instead does propagate, and is worth reaching
+      for when an app keeps its config in a folder you can own outright. It is wrong
+      for a packaged app such as Windows Terminal, whose LocalState is its own data
+      folder: it also holds machine-local runtime state, and turning it into a reparse
+      point invites trouble from package servicing and ACLs.
+
+      Files only. A directory link cannot be replaced by a rename, and no app we link
+      directories for needs this.
+    #>
+    param($LinkPath, $SourceFull, $Kind)
+
+    if ($Kind -eq 'dir') { return 'skipped-dir' }
+    if (-not (Test-Path -LiteralPath $LinkPath)) { return 'absent' }
+
+    $dir  = Split-Path -Parent $LinkPath
+    $leaf = Split-Path -Leaf $LinkPath
+    $tmp  = Join-Path $dir ('.' + $leaf + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
+
+    try {
+        $mech = New-ConfigLink $tmp $SourceFull $Kind
+        Move-Item -LiteralPath $tmp -Destination $LinkPath -Force
+        return $mech
+    } catch {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
 
 function Remove-ExistingTarget($Path) {
     $item = Get-Item -LiteralPath $Path -Force
@@ -643,6 +714,36 @@ function Invoke-Requirements($Module) {
 
 # ----------------------------------------------------------------------- apply
 
+function Invoke-Reload($Module, $Platform) {
+    Write-Head ("reloading: " + $Module.id)
+    $any = $false
+
+    foreach ($l in @(Resolve-ModuleLinks $Module $Platform)) {
+        $st = Get-LinkState $l.SourceFull $l.TargetFull
+        if ($st.State -ne 'Linked' -and $st.State -ne 'Upgrade') {
+            Write-Mark '[skip]' $l.TargetFull 'DarkGray'
+            Write-Note 'not currently linked; run without -Reload first'
+            continue
+        }
+        if ($l.Kind -eq 'dir') { continue }
+        if (-not $PSCmdlet.ShouldProcess($l.TargetFull, 'nudge watcher by re-creating the link')) { continue }
+
+        try {
+            $mech = Reset-Link $l.TargetFull $l.SourceFull $l.Kind
+            if ($mech -eq 'skipped-dir' -or $mech -eq 'absent') { continue }
+            $any = $true
+            $script:Reloaded++
+            Write-Mark '[nudge]' $l.TargetFull 'Green'
+        } catch {
+            $script:Failures += ("reload {0}: {1}" -f $l.TargetFull, $_.Exception.Message)
+            Write-Mark '[FAIL]' $l.TargetFull 'Red'
+            Write-Note $_.Exception.Message
+        }
+    }
+
+    if (-not $any) { Write-Note 'nothing to nudge' }
+}
+
 function Invoke-Module($Module, $Platform) {
     Write-Head ("applying: " + $Module.id)
 
@@ -815,10 +916,10 @@ if ($selected.Count -eq 0) {
 
 foreach ($id in $selected) {
     $m = $registry.modules | Where-Object { $_.id -eq $id }
-    Invoke-Module $m $platform
+    if ($Reload) { Invoke-Reload $m $platform } else { Invoke-Module $m $platform }
 }
 
-Save-Modules $selected
+if (-not $Reload) { Save-Modules $selected }
 
 
 # --------------------------------------------------------------------- summary
@@ -826,6 +927,7 @@ Save-Modules $selected
 Write-Head 'summary'
 Write-Host ("  linked      {0}" -f $script:Applied)
 Write-Host ("  already ok  {0}" -f $script:AlreadyOk)
+if ($Reload) { Write-Host ("  nudged      {0}" -f $script:Reloaded) }
 
 $hardlinked = @($script:Fallbacks | Where-Object { $_ -like '*(HardLink)' })
 if ($hardlinked.Count -gt 0) {

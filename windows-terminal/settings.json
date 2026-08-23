@@ -78,6 +78,7 @@
         "defaults": 
         {
             "backgroundImage": "assets/terminal_bg.png",
+            "backgroundImageOpacity": 0.8,
             "font": 
             {
                 "face": "FiraCode Nerd Font",
@@ -109,7 +110,6 @@
                 "name": "Windows PowerShell"
             },
             {
-                "backgroundImageOpacity": 0.8,
                 "commandline": "%SystemRoot%\\System32\\cmd.exe",
                 "font": 
                 {
