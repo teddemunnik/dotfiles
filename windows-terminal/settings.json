@@ -71,6 +71,10 @@
         {
             "id": "User.sendInput.E116B028",
             "keys": "ctrl+space"
+        },
+        {
+            "id": "Terminal.TogglePaneZoom",
+            "keys": "ctrl+shift+z"
         }
     ],
     "newTabMenu": 
