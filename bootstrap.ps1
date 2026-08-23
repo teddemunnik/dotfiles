@@ -126,15 +126,20 @@ function Expand-TargetPath($Raw) {
       modules.json uses %VAR% on Windows and $HOME elsewhere; normalise both, plus a
       few tokens for locations that cannot be written down literally in a shared file:
 
-        {psprofiledir} - PowerShell's own profile directory. Not %USERPROFILE%\Documents:
-                         Documents is frequently redirected to OneDrive and is localised
-                         (it is "Documenten" on this machine), so any literal spelling is
-                         wrong somewhere. Asking PowerShell is right everywhere.
         {documents}    - the real Documents folder, redirection and locale included.
+                         Not %USERPROFILE%\Documents: it is frequently redirected to
+                         OneDrive and localised (it is "Documenten" on this machine),
+                         so any literal spelling is wrong somewhere.
         {repo}         - wherever this clone happens to live.
+
+      There is deliberately no {psprofiledir} token. It could only come from
+      $PROFILE, which resolves against whichever host runs this script -
+      WindowsPowerShell under 5.1, PowerShell under 7 - so bootstrapping from pwsh
+      would aim both profile links at the same path and silently leave Windows
+      PowerShell unlinked. Both directories are fixed names under {documents}, so
+      spell them out and stay host-independent.
     #>
     $s = [string]$Raw
-    $s = $s.Replace('{psprofiledir}', (Split-Path -Parent $PROFILE.CurrentUserAllHosts))
     $s = $s.Replace('{documents}',    [Environment]::GetFolderPath('MyDocuments'))
     $s = $s.Replace('{repo}',         $RepoRoot)
     $expanded = [Environment]::ExpandEnvironmentVariables($s)
@@ -233,8 +238,16 @@ function Get-LinkState {
     if ($item.PSObject.Properties.Name -contains 'LinkType') { $linkType = $item.LinkType }
 
     if ($linkType -eq 'SymbolicLink' -or $linkType -eq 'Junction') {
+        # Where a link points is spelled differently per host: Windows PowerShell 5.1
+        # gives .Target as a String[], PowerShell 7 gives it as a plain String and adds
+        # .LinkTarget. Under StrictMode, reading .Count off the 7.x string throws and
+        # takes the whole run down, so read whichever this host actually offers.
         $current = ''
-        if ($item.Target -and $item.Target.Count -gt 0) { $current = $item.Target[0] }
+        if (($item.PSObject.Properties.Name -contains 'LinkTarget') -and $item.LinkTarget) {
+            $current = [string]$item.LinkTarget
+        } else {
+            foreach ($t in @($item.Target)) { if ($t) { $current = [string]$t; break } }
+        }
         if ((Get-ComparablePath $current) -eq (Get-ComparablePath $SourceFull)) {
             return @{ State = 'Linked'; Detail = $linkType }
         }

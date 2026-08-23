@@ -112,7 +112,7 @@
     {
       "id": "powershell",
       "description": "PowerShell profile",
-      "$comment": "The target is computed, never hardcoded. Documents on this machine is both redirected to OneDrive and localised - the real path is OneDrive\\Documenten - so %USERPROFILE%\\Documents would be wrong here and wrong in a different way on another machine. {psprofiledir} resolves through PowerShell's own $PROFILE, which is correct under redirection, localisation, and neither. profile.ps1 is the AllHosts profile, so it also loads in the VS Code terminal and the ISE. PowerShell 7 reads a sibling Documents\\PowerShell directory instead; when pwsh enters the picture, add a second link to it with skipIfParentMissing. Machine-local additions go in Microsoft.PowerShell_profile.ps1 beside it, which stays unversioned.",
+      "$comment": "Targets are computed, never hardcoded. Documents on this machine is both redirected to OneDrive and localised - the real path is OneDrive\\Documenten - so %USERPROFILE%\\Documents would be wrong here and wrong in a different way on another machine. {documents} resolves it correctly under redirection, localisation and neither. The two directory names beneath it are fixed: WindowsPowerShell for 5.1, PowerShell for 7. Do not reach for $PROFILE to derive these - it resolves against whichever host runs the bootstrap, so running it from pwsh would aim both links at the PS7 path and leave Windows PowerShell unlinked. profile.ps1 is the AllHosts profile, so it also loads in the VS Code terminal and the ISE, and one file serves both shells. Machine-local additions go in Microsoft.PowerShell_profile.ps1 beside it, which stays unversioned.",
       "enabled": true,
       "enabledByDefault": true,
       "links": [
@@ -120,7 +120,7 @@
           "source": "powershell/profile.ps1",
           "type": "file",
           "target": {
-            "windows": "{psprofiledir}\\profile.ps1"
+            "windows": "{documents}\\WindowsPowerShell\\profile.ps1"
           }
         },
         {
