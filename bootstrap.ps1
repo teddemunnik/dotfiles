@@ -49,7 +49,8 @@ $RegistryPath = Join-Path $RepoRoot 'bootstrap\modules.json'
 $StatePath    = Join-Path $RepoRoot 'bootstrap\state.local.json'
 
 # Probed once, lazily, by Test-SymlinkCapability. StrictMode requires it to exist.
-$script:SymlinkCapable = $null
+$script:SymlinkCapable   = $null
+$script:LastSymlinkError = ''
 
 # Tallies that decide the exit code.
 $script:Applied   = 0
@@ -97,28 +98,56 @@ function Expand-TargetPath($Raw) {
     return $expanded
 }
 
+function New-Symlink {
+    <#
+      Creates a symlink via cmd's mklink rather than New-Item -ItemType SymbolicLink.
+
+      This is deliberate. Windows PowerShell 5.1 does not pass
+      SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE, so its New-Item demands
+      elevation even when Developer Mode is on - it only learned the flag in
+      PowerShell 7. mklink does pass it, so with Developer Mode enabled this
+      succeeds as a normal user and no elevation (or sudo) is needed anywhere.
+
+      Returns $true on success. Never throws.
+    #>
+    param($LinkPath, $SourceFull, [switch] $Directory)
+
+    $out = if ($Directory) {
+        & cmd.exe /c mklink /D $LinkPath $SourceFull 2>&1
+    } else {
+        & cmd.exe /c mklink $LinkPath $SourceFull 2>&1
+    }
+
+    if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $LinkPath)) { return $true }
+    $script:LastSymlinkError = ($out | Out-String).Trim()
+    return $false
+}
+
 function Test-SymlinkCapability {
     <#
-      Windows only grants symlink creation to elevated processes, or to any process
-      once Developer Mode is on. Probe once per run so we can tell "linked, but via a
-      fallback we can now improve on" apart from "linked correctly".
+      Symlink creation needs either elevation or Developer Mode. Probe once per run,
+      through the same mklink path used for real links, so the answer reflects what
+      will actually happen. Lets us tell "linked, but via a fallback we can now
+      improve on" apart from "linked correctly".
     #>
     if ($null -ne $script:SymlinkCapable) { return $script:SymlinkCapable }
 
     $probeDir = Join-Path ([System.IO.Path]::GetTempPath()) ("dotfiles-symlink-probe-" + [guid]::NewGuid().ToString('N'))
     $script:SymlinkCapable = $false
+    # -WhatIf:$false throughout: this is a question about the environment, answered in
+    # a scratch directory. Letting -WhatIf suppress it would make the probe report "no
+    # symlinks" and the dry run would then describe a different plan than the real run.
     try {
-        New-Item -ItemType Directory -Path $probeDir -Force | Out-Null
+        New-Item -ItemType Directory -Path $probeDir -Force -WhatIf:$false | Out-Null
         $realFile = Join-Path $probeDir 'real.txt'
         $linkFile = Join-Path $probeDir 'link.txt'
-        Set-Content -LiteralPath $realFile -Value 'probe'
-        New-Item -ItemType SymbolicLink -Path $linkFile -Target $realFile -ErrorAction Stop | Out-Null
-        $script:SymlinkCapable = $true
+        Set-Content -LiteralPath $realFile -Value 'probe' -WhatIf:$false
+        $script:SymlinkCapable = (New-Symlink $linkFile $realFile)
     } catch {
         $script:SymlinkCapable = $false
     } finally {
         if (Test-Path -LiteralPath $probeDir) {
-            Remove-Item -LiteralPath $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probeDir -Recurse -Force -WhatIf:$false -ErrorAction SilentlyContinue
         }
     }
     return $script:SymlinkCapable
@@ -242,16 +271,14 @@ function New-ConfigLink {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
     }
 
-    $symlinkError = 'not permitted (needs elevation or Developer Mode)'
+    $script:LastSymlinkError = 'not permitted (needs Developer Mode or elevation)'
     if (Test-SymlinkCapability) {
-        try {
-            New-Item -ItemType SymbolicLink -Path $LinkPath -Target $SourceFull -ErrorAction Stop | Out-Null
+        if (New-Symlink $LinkPath $SourceFull -Directory:($Kind -eq 'dir')) {
             return 'SymbolicLink'
-        } catch {
-            $symlinkError = $_.Exception.Message
         }
     }
 
+    # No symlink: fall back to something that needs no privilege at all.
     try {
         if ($Kind -eq 'dir') {
             New-Item -ItemType Junction -Path $LinkPath -Target $SourceFull -ErrorAction Stop | Out-Null
@@ -260,7 +287,7 @@ function New-ConfigLink {
         New-Item -ItemType HardLink -Path $LinkPath -Target $SourceFull -ErrorAction Stop | Out-Null
         return 'HardLink'
     } catch {
-        throw ("symlink failed ({0}); fallback failed ({1})" -f $symlinkError, $_.Exception.Message)
+        throw ("symlink failed ({0}); fallback failed ({1})" -f $script:LastSymlinkError, $_.Exception.Message)
     }
 }
 
@@ -555,9 +582,10 @@ if ($hardlinked.Count -gt 0) {
     foreach ($f in $hardlinked) { Write-Host ("    " + $f) -ForegroundColor Yellow }
     Write-Host '    A hardlink breaks silently if a tool replaces the file rather than' -ForegroundColor DarkGray
     Write-Host '    editing it in place, and edits then stop reaching the repo.' -ForegroundColor DarkGray
-    Write-Host '    For real symlinks: turn on Windows Developer Mode (Settings > System >' -ForegroundColor DarkGray
-    Write-Host '    For developers), or run this script from an elevated shell once, then' -ForegroundColor DarkGray
-    Write-Host '    re-run - it detects the hardlinks and upgrades them.' -ForegroundColor DarkGray
+    Write-Host '    For real symlinks, turn on Developer Mode (Settings > System > For' -ForegroundColor DarkGray
+    Write-Host '    developers) - no elevation needed, mklink honours it - then re-run;' -ForegroundColor DarkGray
+    Write-Host '    this script detects the hardlinks and upgrades them in place.' -ForegroundColor DarkGray
+    Write-Host '    Failing that, run it once via sudo or from an elevated shell.' -ForegroundColor DarkGray
 }
 
 if ($script:Conflicts.Count -gt 0) {
