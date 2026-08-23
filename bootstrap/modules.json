@@ -187,7 +187,15 @@
           }
         }
       ],
-      "requires": []
+      "requires": [
+        {
+          "kind": "font",
+          "family": "FiraCode Nerd Font",
+          "file": "fonts/FiraCodeNerdFont-Regular.ttf",
+          "autoInstall": true,
+          "reason": "settings.json sets font.face to this; without it Windows Terminal silently falls back and the powerline glyphs in the claude-powerline statusline render as boxes. Vendored rather than fetched because winget has no FiraCode Nerd Font package - only JetBrainsMono - and the font is OFL licensed, so redistributing it here is fine"
+        }
+      ]
     }
   ]
 }

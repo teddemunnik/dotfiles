@@ -12,6 +12,8 @@
     A module may declare dependencies in `requires`, each with a `kind`:
       winget  - a Windows package, by exact id (find one with `winget search <name>`)
       npm     - a global npm package
+      font    - a TrueType file vendored in this repo, installed for the current
+                user (no elevation). For fonts winget does not carry.
       command - advisory only: report if absent, never install
     Entries marked "autoInstall": true are installed when a module is applied;
     everything else is only reported. -SkipPackages suppresses installs entirely.
@@ -519,8 +521,105 @@ function Get-RequirementName($Req) {
     switch ($Req.kind) {
         'winget'  { return (Get-Prop $Req 'id' '?') }
         'npm'     { return (Get-Prop $Req 'package' '?') }
+        'font'    { return (Get-Prop $Req 'family' '?') }
         default   { return (Get-Prop $Req 'name' '?') }
     }
+}
+
+function Test-FontInstalled($Family) {
+    # Asks the system what families it actually has, so a font installed by any
+    # route counts - not just one this script put there.
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $c = New-Object System.Drawing.Text.InstalledFontCollection
+        return (@($c.Families | Where-Object { $_.Name -eq $Family }).Count -gt 0)
+    } catch {
+        return $false
+    }
+}
+
+function Install-Font($Req) {
+    <#
+      Installs a TrueType file for the current user only: copy into
+      %LOCALAPPDATA%\Microsoft\Windows\Fonts and add one HKCU registry value.
+
+      Per-user on purpose. The machine-wide equivalent (%WINDIR%\Fonts plus HKLM)
+      needs elevation, and nothing else in this bootstrap asks for that. Windows 10
+      1809 and later resolve per-user fonts for every desktop app.
+
+      The font is vendored in the repo rather than fetched: winget has no FiraCode
+      Nerd Font package - only JetBrainsMono - so there is nothing to install from,
+      and 2.5 MB of OFL-licensed font is cheaper than a download step that can fail
+      offline or drift with upstream releases.
+    #>
+    $src = Join-Path $RepoRoot ((Get-Prop $Req 'file' '') -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $src)) {
+        Write-Mark '[dep]' ("font file missing from repo: {0}" -f $src) 'Red'
+        return $false
+    }
+
+    $dir = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $dest = Join-Path $dir (Split-Path -Leaf $src)
+
+    # A font file already in place is usually memory-mapped by the font cache, and
+    # copying over it fails with "user-mapped section open". Skip the copy when the
+    # bytes already match - which is the common case when only the registration was
+    # lost - and tolerate a locked destination that is already the file we want.
+    $needCopy = $true
+    if (Test-Path -LiteralPath $dest) {
+        if ((Get-FileHash -LiteralPath $src).Hash -eq (Get-FileHash -LiteralPath $dest).Hash) {
+            $needCopy = $false
+        }
+    }
+    if ($needCopy) {
+        try {
+            Copy-Item -LiteralPath $src -Destination $dest -Force -ErrorAction Stop
+        } catch {
+            if (-not (Test-Path -LiteralPath $dest)) {
+                Write-Mark '[dep]' ("could not place font file: {0}" -f $_.Exception.Message) 'Red'
+                return $false
+            }
+            Write-Note 'destination locked by the font cache; keeping the file already there'
+        }
+    }
+
+    # Registry value name is a label; the real family comes from the file itself.
+    # Read it back off the file so the entry matches what the font actually is.
+    $label = Get-RequirementName $Req
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $pfc = New-Object System.Drawing.Text.PrivateFontCollection
+        $pfc.AddFontFile($dest)
+        if ($pfc.Families.Count -gt 0) { $label = $pfc.Families[0].Name }
+        $pfc.Dispose()
+    } catch { }
+
+    $key = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+    New-ItemProperty -Path $key -Name "$label (TrueType)" -Value $dest -PropertyType String -Force | Out-Null
+
+    # Tell already-running apps a font arrived; without this they only notice on restart.
+    #
+    # SendMessageTimeout, not SendMessage. A plain SendMessage to HWND_BROADCAST waits
+    # for every top-level window on the desktop to acknowledge, so one unresponsive
+    # app hangs the bootstrap indefinitely - which is exactly what happened while
+    # testing this. SMTO_ABORTIFHUNG plus a short timeout makes the notification
+    # best-effort, which is all it ever needed to be: the font is already registered
+    # by this point, and any app started afterwards picks it up regardless.
+    try {
+        Add-Type -Namespace Win32 -Name Font -MemberDefinition @'
+[DllImport("gdi32.dll")] public static extern int AddFontResource(string lpFilename);
+[DllImport("user32.dll", SetLastError = true)] public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out UIntPtr result);
+'@ -ErrorAction Stop
+        [Win32.Font]::AddFontResource($dest) | Out-Null
+        $res = [UIntPtr]::Zero
+        # HWND_BROADCAST, WM_FONTCHANGE, SMTO_ABORTIFHUNG|SMTO_NORMAL, 1s
+        [Win32.Font]::SendMessageTimeout([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero, 0x0002, 1000, [ref]$res) | Out-Null
+    } catch { }
+
+    return $true
 }
 
 function Test-Requirement($Req) {
@@ -535,6 +634,9 @@ function Test-Requirement($Req) {
     }
 
     switch ($Req.kind) {
+        'font' {
+            return (Test-FontInstalled (Get-Prop $Req 'family' ''))
+        }
         'winget' {
             if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
             & winget list --id $Req.id --exact --accept-source-agreements 2>&1 | Out-Null
@@ -558,6 +660,9 @@ function Get-RequirementInstallCommand($Req) {
         'npm' {
             return ("npm install -g {0}" -f $Req.package)
         }
+        'font' {
+            return ("install {0} from the repo (per-user, no elevation)" -f (Get-Prop $Req 'file' ''))
+        }
         default { return (Get-Prop $Req 'install' $null) }
     }
 }
@@ -565,6 +670,21 @@ function Get-RequirementInstallCommand($Req) {
 function Install-Requirement($Req) {
     # Returns $true when the dependency ends up present.
     $name = Get-RequirementName $Req
+
+    if ($Req.kind -eq 'font') {
+        if (-not $PSCmdlet.ShouldProcess($name, 'install font for the current user')) { return $false }
+        Write-Mark '[dep]' ("installing font {0} ..." -f $name) 'Cyan'
+        if (-not (Install-Font $Req)) { return $false }
+        if (Test-FontInstalled (Get-Prop $Req 'family' '')) {
+            Write-Mark '[dep]' ("{0} installed" -f $name) 'Green'
+            return $true
+        }
+        # Registered, but this process's font list was built at start-up and will not
+        # show it. Treat a present file plus registry value as success.
+        Write-Mark '[dep]' ("{0} installed (visible to new processes)" -f $name) 'Green'
+        return $true
+    }
+
     $tool = 'winget'
     if ($Req.kind -eq 'npm') { $tool = 'npm' }
 
