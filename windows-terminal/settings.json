@@ -16,15 +16,6 @@
             "id": "User.paste"
         },
         {
-            "command": 
-            {
-                "action": "splitPane",
-                "split": "auto",
-                "splitMode": "duplicate"
-            },
-            "id": "User.splitPane.A6751878"
-        },
-        {
             "command": "find",
             "id": "User.find"
         },
@@ -63,10 +54,6 @@
         {
             "id": null,
             "keys": "alt+enter"
-        },
-        {
-            "id": "User.splitPane.A6751878",
-            "keys": "alt+shift+d"
         },
         {
             "id": "User.sendInput.E116B028",
