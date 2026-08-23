@@ -73,6 +73,34 @@
         },
         {
           "kind": "winget",
+          "id": "BurntSushi.ripgrep.MSVC",
+          "check": "rg",
+          "autoInstall": true,
+          "reason": "fast recursive grep. MSVC rather than the GNU build - that one targets a MinGW toolchain and is not what you want on a plain Windows box"
+        },
+        {
+          "kind": "winget",
+          "id": "Git.Git",
+          "check": "git",
+          "autoInstall": true,
+          "reason": "git itself. Circular on a machine that already cloned this repo, but the entry earns its place the moment someone sets one up from a zip or a different clone method"
+        },
+        {
+          "kind": "winget",
+          "id": "GitHub.cli",
+          "check": "gh",
+          "autoInstall": true,
+          "reason": "gh - PRs and issues from the terminal"
+        },
+        {
+          "kind": "winget",
+          "id": "Neovim.Neovim",
+          "check": "nvim",
+          "autoInstall": true,
+          "reason": "pairs with the nvim config already tracked in this repo, which the nvim module will link once its direction is de-tangled"
+        },
+        {
+          "kind": "winget",
           "id": "Microsoft.PowerShell",
           "check": "pwsh",
           "autoInstall": true,
