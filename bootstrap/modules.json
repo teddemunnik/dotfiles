@@ -70,6 +70,13 @@
           "check": "fzf",
           "autoInstall": true,
           "reason": "fuzzy finder; also what zoxide's interactive `zi` shells out to"
+        },
+        {
+          "kind": "winget",
+          "id": "Microsoft.PowerShell",
+          "check": "pwsh",
+          "autoInstall": true,
+          "reason": "PowerShell 7. Installing it is all that is needed - Windows Terminal's own PowershellCore generator adds the profile, and the powershell module links profile.ps1 into PS7's directory once pwsh exists"
         }
       ]
     },
@@ -86,6 +93,15 @@
           "type": "file",
           "target": {
             "windows": "{psprofiledir}\\profile.ps1"
+          }
+        },
+        {
+          "source": "powershell/profile.ps1",
+          "type": "file",
+          "skipUnlessCommand": "pwsh",
+          "$comment": "PowerShell 7 reads {documents}\\PowerShell, a sibling of Windows PowerShell's directory, and one file serves both. Gated on pwsh rather than on the directory existing: PS7 creates no profile directory until something writes one, so a directory test would answer no on a machine that does have PS7.",
+          "target": {
+            "windows": "{documents}\\PowerShell\\profile.ps1"
           }
         }
       ],

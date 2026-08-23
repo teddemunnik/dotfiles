@@ -426,6 +426,13 @@ function Resolve-ModuleLinks($Module, $Platform) {
             if (-not (Test-Path -LiteralPath $parent)) { continue }
         }
 
+        # skipUnlessCommand: gate on the tool itself rather than on its config folder.
+        # Needed when the folder legitimately does not exist yet and we intend to
+        # create it - PowerShell 7 has no profile directory until something writes one,
+        # so "is the directory there" would answer no on a machine that has pwsh.
+        $needs = Get-Prop $link 'skipUnlessCommand' $null
+        if ($needs -and -not (Get-Command $needs -ErrorAction SilentlyContinue)) { continue }
+
         $out += [pscustomobject]@{
             Source     = $link.source
             SourceFull = (Join-Path $RepoRoot ($link.source -replace '/', '\'))
