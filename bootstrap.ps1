@@ -37,6 +37,12 @@
 .PARAMETER SkipPackages
     Link files only. Missing packages are reported but never installed.
 
+.PARAMETER Upgrade
+    Install nothing new and link nothing; move what this bootstrap already installed
+    to its latest version. Scoped to the registry, so it will not touch unrelated
+    packages on the machine. Vendored files such as fonts are moved by a git pull
+    instead, and links already point at the repo.
+
 .PARAMETER Reload
     Link nothing; just re-create the existing links so a watching app notices and
     hot-reloads. Use after editing a config in this repo. See Reset-Link for why an
@@ -67,7 +73,8 @@ param(
     [switch]   $Apply,
     [switch]   $Force,
     [switch]   $SkipPackages,
-    [switch]   $Reload
+    [switch]   $Reload,
+    [switch]   $Upgrade
 )
 
 Set-StrictMode -Version 2.0
@@ -90,6 +97,7 @@ $script:Fallbacks = @()
 $script:MissingDeps = @()
 $script:EnvChanged  = @()
 $script:Reloaded    = 0
+$script:Upgraded    = 0
 
 
 # ---------------------------------------------------------------- presentation
@@ -526,6 +534,17 @@ function Get-RequirementName($Req) {
     }
 }
 
+function Get-NpmGlobalVersion($Package) {
+    # Returns the installed version of a global npm package, or $null. Used to tell a
+    # real upgrade from a no-op, which npm's exit code does not distinguish.
+    try {
+        $out = & npm ls -g $Package --depth=0 2>$null | Out-String
+        $m = [regex]::Match($out, [regex]::Escape($Package) + '@([0-9][^\s]*)')
+        if ($m.Success) { return $m.Groups[1].Value }
+    } catch { }
+    return $null
+}
+
 function Update-ProcessPath {
     # Rebuild this process's PATH from the persisted Machine and User values, so a
     # tool installed during this run becomes findable without starting a new shell.
@@ -871,6 +890,98 @@ function Invoke-Requirements($Module) {
 
 # ----------------------------------------------------------------------- apply
 
+function Invoke-Upgrade($Module, $Platform) {
+    <#
+      Upgrades what this module installed, and nothing else. Deliberately scoped to
+      the registry rather than shelling out to `winget upgrade --all`: the point is to
+      move the things the bootstrap is responsible for, not everything on the machine.
+
+      Links are not upgraded and cannot be - they already point at the repo, so the
+      way to move those is a git pull, which this does not do on your behalf.
+    #>
+    Write-Head ("upgrading: " + $Module.id)
+    $any = $false
+
+    foreach ($req in @(Get-Prop $Module 'requires' @())) {
+        $name = Get-RequirementName $req
+        Write-Host ''
+
+        if ($req.kind -eq 'font') {
+            Write-Mark '[skip]' $name 'DarkGray'
+            Write-Note 'vendored in this repo - a git pull is what moves it'
+            continue
+        }
+        if ($req.kind -ne 'winget' -and $req.kind -ne 'npm') {
+            Write-Mark '[skip]' $name 'DarkGray'
+            Write-Note 'advisory requirement; nothing to upgrade'
+            continue
+        }
+        if (-not (Test-Requirement $req)) {
+            Write-Mark '[skip]' $name 'Yellow'
+            Write-Note 'not installed here; run without -Upgrade first'
+            continue
+        }
+
+        $tool = if ($req.kind -eq 'npm') { 'npm' } else { 'winget' }
+        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+            Write-Mark '[skip]' ("{0} - {1} unavailable" -f $name, $tool) 'Red'
+            continue
+        }
+        if (-not $PSCmdlet.ShouldProcess($name, ("upgrade via " + $tool))) { continue }
+
+        Write-Mark '[upgrade]' ("{0} ..." -f $name) 'Cyan'
+        $before = if ($req.kind -eq 'npm') { Get-NpmGlobalVersion $req.package } else { $null }
+
+        $out = if ($req.kind -eq 'npm') {
+            & npm install -g ("{0}@latest" -f $req.package) 2>&1
+        } else {
+            & winget upgrade --id $req.id --exact --silent `
+                --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
+        }
+        $code = $LASTEXITCODE
+        $text = ($out | Out-String)
+
+        Update-ProcessPath
+
+        # npm exits 0 whether it moved the package or found it already current, so the
+        # exit code alone would report every run as an upgrade. Compare versions.
+        if ($req.kind -eq 'npm' -and $code -eq 0) {
+            $after = Get-NpmGlobalVersion $req.package
+            if ($before -and $after -and $before -eq $after) {
+                Write-Mark '[ok]' ("{0} already current ({1})" -f $name, $after) 'Green'
+            } else {
+                $any = $true; $script:Upgraded++
+                Write-Mark '[done]' ("{0} {1} -> {2}" -f $name, $before, $after) 'Green'
+            }
+            continue
+        }
+
+        # -1978335189 is winget's "no applicable upgrade", i.e. already current. That
+        # is a success for our purposes, not a failure, so read it before the code.
+        if ($code -eq 0) {
+            $any = $true
+            $script:Upgraded++
+            Write-Mark '[done]' ("{0} upgraded" -f $name) 'Green'
+        } elseif ($text -match 'No available upgrade|no applicable|already installed' -or $code -eq -1978335189) {
+            Write-Mark '[ok]' ("{0} already current" -f $name) 'Green'
+        } elseif ($text -match 'run as administrator|requires administrator|elevat') {
+            # A machine-scope installer declined the UAC prompt that --disable-interactivity
+            # suppressed. Not a broken upgrade - just one this unelevated run cannot do.
+            $script:Failures += ("upgrade {0}: needs elevation" -f $name)
+            Write-Mark '[ADMIN]' ("{0} needs an elevated run" -f $name) 'Yellow'
+            Write-Note ("sudo winget upgrade --id {0} --exact" -f $req.id)
+        } else {
+            $script:Failures += ("upgrade {0}: exit {1}" -f $name, $code)
+            Write-Mark '[FAIL]' ("{0} (exit {1})" -f $name, $code) 'Red'
+            ($text -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 3) | ForEach-Object { Write-Note $_.Trim() }
+        }
+    }
+
+    if (-not $any -and -not $WhatIfPreference -and $script:Failures.Count -eq 0) {
+        Write-Note 'nothing needed upgrading'
+    }
+}
+
 function Invoke-Reload($Module, $Platform) {
     Write-Head ("reloading: " + $Module.id)
     $any = $false
@@ -1073,10 +1184,12 @@ if ($selected.Count -eq 0) {
 
 foreach ($id in $selected) {
     $m = $registry.modules | Where-Object { $_.id -eq $id }
-    if ($Reload) { Invoke-Reload $m $platform } else { Invoke-Module $m $platform }
+    if ($Upgrade)     { Invoke-Upgrade $m $platform }
+    elseif ($Reload)  { Invoke-Reload  $m $platform }
+    else              { Invoke-Module  $m $platform }
 }
 
-if (-not $Reload) { Save-Modules $selected }
+if (-not $Reload -and -not $Upgrade) { Save-Modules $selected }
 
 
 # --------------------------------------------------------------------- summary
@@ -1084,7 +1197,8 @@ if (-not $Reload) { Save-Modules $selected }
 Write-Head 'summary'
 Write-Host ("  linked      {0}" -f $script:Applied)
 Write-Host ("  already ok  {0}" -f $script:AlreadyOk)
-if ($Reload) { Write-Host ("  nudged      {0}" -f $script:Reloaded) }
+if ($Reload)  { Write-Host ("  nudged      {0}" -f $script:Reloaded) }
+if ($Upgrade) { Write-Host ("  upgraded    {0}" -f $script:Upgraded) }
 
 $hardlinked = @($script:Fallbacks | Where-Object { $_ -like '*(HardLink)' })
 if ($hardlinked.Count -gt 0) {
