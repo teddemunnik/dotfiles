@@ -121,7 +121,7 @@
     {
       "id": "powershell",
       "description": "PowerShell profile",
-      "$comment": "Targets are computed, never hardcoded. Documents on this machine is both redirected to OneDrive and localised - the real path is OneDrive\\Documenten - so %USERPROFILE%\\Documents would be wrong here and wrong in a different way on another machine. {documents} resolves it correctly under redirection, localisation and neither. The two directory names beneath it are fixed: WindowsPowerShell for 5.1, PowerShell for 7. Do not reach for $PROFILE to derive these - it resolves against whichever host runs the bootstrap, so running it from pwsh would aim both links at the PS7 path and leave Windows PowerShell unlinked. profile.ps1 is the AllHosts profile, so it also loads in the VS Code terminal and the ISE, and one file serves both shells. Machine-local additions go in Microsoft.PowerShell_profile.ps1 beside it, which stays unversioned.",
+      "$comment": "Targets are computed, never hardcoded. Documents on this machine is both redirected to OneDrive and localised - the real path is OneDrive\\Documenten - so %USERPROFILE%\\Documents would be wrong here and wrong in a different way on another machine. {documents} resolves it correctly under redirection, localisation and neither. The two directory names beneath it are fixed: WindowsPowerShell for 5.1, PowerShell for 7. Do not reach for $PROFILE to derive these - it resolves against whichever host runs the bootstrap, so running it from pwsh would aim both links at the PS7 path and leave Windows PowerShell unlinked. profile.ps1 is the AllHosts profile, so it also loads in the VS Code terminal and the ISE, and one file serves both shells. Machine-local additions go in profile.local.ps1, which profile.ps1 dot-sources and this repo gitignores. That in preference to Microsoft.PowerShell_profile.ps1, the other obvious place: that name is per-host, so it would need a copy in each of the two directories and would still not load in the ISE or the VS Code terminal, which read their own Microsoft.*_profile.ps1 names.",
       "enabled": true,
       "enabledByDefault": true,
       "links": [
@@ -139,6 +139,24 @@
           "$comment": "PowerShell 7 reads {documents}\\PowerShell, a sibling of Windows PowerShell's directory, and one file serves both. Gated on pwsh rather than on the directory existing: PS7 creates no profile directory until something writes one, so a directory test would answer no on a machine that does have PS7.",
           "target": {
             "windows": "{documents}\\PowerShell\\profile.ps1"
+          }
+        },
+        {
+          "source": "powershell/profile.local.ps1",
+          "type": "file",
+          "skipIfSourceMissing": true,
+          "$comment": "The machine-local half of the profile, dot-sourced by profile.ps1. Gitignored, so on a machine that has not written one both of these links are simply skipped - create powershell/profile.local.ps1 and re-run to pick it up. It is linked beside profile.ps1 rather than dot-sourced straight out of the repo because profile.ps1 finds it as $PSScriptRoot\\profile.local.ps1, and $PSScriptRoot is the directory the profile was loaded from, not the repo the link points into. One repo file behind both links keeps 5.1 and 7 in step.",
+          "target": {
+            "windows": "{documents}\\WindowsPowerShell\\profile.local.ps1"
+          }
+        },
+        {
+          "source": "powershell/profile.local.ps1",
+          "type": "file",
+          "skipIfSourceMissing": true,
+          "skipUnlessCommand": "pwsh",
+          "target": {
+            "windows": "{documents}\\PowerShell\\profile.local.ps1"
           }
         }
       ],

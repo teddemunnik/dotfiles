@@ -6,8 +6,7 @@
 #
 # This file is shared across machines, so everything in it must either be true
 # everywhere or guard itself. Anything genuinely local to one machine belongs in
-# Microsoft.PowerShell_profile.ps1 next to this file, which is deliberately not
-# versioned - PowerShell loads both, AllHosts first.
+# profile.local.ps1, which the last block here dot-sources.
 
 # --- completion ---------------------------------------------------------------
 # Out of the box Tab is TabCompleteNext, which cycles through matches one at a time
@@ -31,3 +30,18 @@ if (Get-Command Set-PSReadLineKeyHandler -ErrorAction SilentlyContinue) {
 if (Get-Command zoxide -ErrorAction SilentlyContinue) {
     Invoke-Expression (& { (zoxide init powershell | Out-String) })
 }
+
+# --- machine-local ------------------------------------------------------------
+# Last, so a machine can override anything set above.
+#
+# profile.local.ps1 is gitignored: it holds the things that are true of one machine
+# only - a path that exists nowhere else, a work-only tool's setup. Edit it in
+# the repo alongside this file; `bootstrap.ps1 -Modules powershell` links it beside
+# each host's profile.ps1, which is why $PSScriptRoot finds it. Machines without one
+# skip this silently.
+#
+# Not dot-sourced from the repo directly, and not named
+# Microsoft.PowerShell_profile.ps1 - see the powershell module in
+# bootstrap/modules.json for why.
+$localProfile = Join-Path $PSScriptRoot 'profile.local.ps1'
+if (Test-Path -LiteralPath $localProfile) { . $localProfile }

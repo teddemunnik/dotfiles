@@ -456,9 +456,18 @@ function Resolve-ModuleLinks($Module, $Platform) {
         $needs = Get-Prop $link 'skipUnlessCommand' $null
         if ($needs -and -not (Get-Command $needs -ErrorAction SilentlyContinue)) { continue }
 
+        # skipIfSourceMissing: the repo copy is optional rather than expected. What it
+        # is for is machine-local files - gitignored, written by hand on the one
+        # machine that wants them - so having nothing to link is the normal case here,
+        # not the registry bug a missing source usually means. Without it every other
+        # machine would report [BROKEN] on every run and learn to ignore the word.
+        $sourceFull = Join-Path $RepoRoot ($link.source -replace '/', '\')
+        if ((Get-Prop $link 'skipIfSourceMissing' $false) -and
+            -not (Test-Path -LiteralPath $sourceFull)) { continue }
+
         $out += [pscustomobject]@{
             Source     = $link.source
-            SourceFull = (Join-Path $RepoRoot ($link.source -replace '/', '\'))
+            SourceFull = $sourceFull
             TargetFull = $targetExpanded
             Kind       = $kind
         }

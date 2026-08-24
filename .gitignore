@@ -12,3 +12,6 @@ bootstrap/state.local.json
 claude/.credentials.json
 claude/settings.local.json
 claude/.claude.json
+
+# powershell: machine-local profile, dot-sourced by the shared one. Never shared.
+powershell/profile.local.ps1
