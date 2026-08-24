@@ -30,7 +30,7 @@
     ],
     "copyFormatting": "none",
     "copyOnSelect": false,
-    "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+    "defaultProfile": "{b9e4ce67-7ef9-4ffe-b2a2-921df5f8f3f6}",
     "disabledProfileSources": 
     [
         "Windows.Terminal.Azure",
@@ -100,9 +100,14 @@
         "list": 
         [
             {
-                "commandline": "pwsh.exe -NoLogo",
-                "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+                "commandline": "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Microsoft.PowerShell_8wekyb3d8bbwe\\pwsh.exe -NoLogo",
+                "guid": "{b9e4ce67-7ef9-4ffe-b2a2-921df5f8f3f6}",
                 "hidden": false,
+                "name": "PowerShell"
+            },
+            {
+                "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+                "hidden": true,
                 "name": "PowerShell",
                 "source": "Windows.Terminal.PowershellCore"
             },
